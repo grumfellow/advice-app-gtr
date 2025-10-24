@@ -1,0 +1,51 @@
+[debug] [2025-10-24T02:13:17.583Z] ----------------------------------------------------------------------
+[debug] [2025-10-24T02:13:17.597Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\grumfellow\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js serve
+[debug] [2025-10-24T02:13:17.598Z] CLI Version:   14.19.1
+[debug] [2025-10-24T02:13:17.598Z] Platform:      win32
+[debug] [2025-10-24T02:13:17.598Z] Node Version:  v22.13.1
+[debug] [2025-10-24T02:13:17.598Z] Time:          Thu Oct 23 2025 21:13:17 GMT-0500 (Central Daylight Time)
+[debug] [2025-10-24T02:13:17.599Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-10-24T02:13:17.601Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-10-24T02:13:17.832Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-24T02:13:17.832Z] > authorizing via signed-in user (grumfellow@gmail.com)
+[debug] [2025-10-24T02:13:17.832Z] [iam] checking project advice-app-gtr for permissions ["firebase.projects.get"]
+[debug] [2025-10-24T02:13:17.833Z] Checked if tokens are valid: false, expires at: 1760963381186
+[debug] [2025-10-24T02:13:17.833Z] Checked if tokens are valid: false, expires at: 1760963381186
+[debug] [2025-10-24T02:13:17.833Z] > refreshing access token with scopes: []
+[debug] [2025-10-24T02:13:17.835Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-10-24T02:13:17.835Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-10-24T02:13:17.930Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-10-24T02:13:17.930Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-10-24T02:13:17.940Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-10-24T02:13:17.940Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-10-24T02:13:17.947Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr:testIamPermissions [none]
+[debug] [2025-10-24T02:13:17.947Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr:testIamPermissions x-goog-quota-user=projects/advice-app-gtr
+[debug] [2025-10-24T02:13:17.947Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-10-24T02:13:18.112Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr:testIamPermissions 200
+[debug] [2025-10-24T02:13:18.112Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-10-24T02:13:18.112Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.112Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.112Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr [none]
+[debug] [2025-10-24T02:13:18.179Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr 200
+[debug] [2025-10-24T02:13:18.180Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/advice-app-gtr {"projectNumber":"230253321111","projectId":"advice-app-gtr","lifecycleState":"ACTIVE","name":"advice-app-gtr","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-10-09T02:32:55.927611Z"}
+[info] 
+[info] === Serving from 'C:\Users\grumfellow\Projects\firebase\advice'...
+[info] 
+[debug] [2025-10-24T02:13:18.182Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.182Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.183Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/advice-app-gtr/sites 
+[debug] [2025-10-24T02:13:18.453Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/advice-app-gtr/sites 200
+[debug] [2025-10-24T02:13:18.454Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/advice-app-gtr/sites {"sites":[{"name":"projects/advice-app-gtr/sites/advice-app-gtr","defaultUrl":"https://advice-app-gtr.web.app","type":"DEFAULT_SITE"}]}
+[debug] [2025-10-24T02:13:18.454Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.454Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.454Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/advice-app-gtr/webApps/-/config [none]
+[debug] [2025-10-24T02:13:18.735Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/advice-app-gtr/webApps/-/config 200
+[debug] [2025-10-24T02:13:18.735Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/advice-app-gtr/webApps/-/config {"projectId":"advice-app-gtr","storageBucket":"advice-app-gtr.firebasestorage.app","apiKey":"AIzaSyBs6jjhw2DzMAwAhJtKX413U4uKTKm9LZk","authDomain":"advice-app-gtr.firebaseapp.com","messagingSenderId":"230253321111","projectNumber":"230253321111","version":"2"}
+[debug] [2025-10-24T02:13:18.741Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.741Z] Checked if tokens are valid: true, expires at: 1761275596940
+[debug] [2025-10-24T02:13:18.741Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/advice-app-gtr [none]
+[debug] [2025-10-24T02:13:18.888Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/advice-app-gtr 200
+[debug] [2025-10-24T02:13:18.888Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/advice-app-gtr {"projectId":"advice-app-gtr","projectNumber":"230253321111","displayName":"advice-app-gtr","name":"projects/advice-app-gtr","resources":{"hostingSite":"advice-app-gtr"},"state":"ACTIVE","etag":"1_2b94e4fd-35a5-4e99-bcb9-006dc505ecb1"}
+[info] i  hosting[advice-app-gtr]: Serving hosting files from: public {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mpublic\u001b[22m"}}
+[info] +  hosting[advice-app-gtr]: Local server: http://localhost:5000 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://localhost:5000\u001b[22m\u001b[24m"}}

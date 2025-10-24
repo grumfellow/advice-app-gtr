@@ -32,6 +32,7 @@
   const adviceList = document.getElementById('advice-list');
   const form = document.getElementById('advice-form');
   const toggleBtn = document.getElementById("toggle-view");
+  const addAdviceSection = document.getElementById("add-advice-section");
   let viewMode = "all"; // all | mine | bookmarked
   let unsubscribe = null;
   let currentUser = null;
@@ -138,13 +139,14 @@ async function toggleBookmark(user, adviceId, btn) {
     btn.textContent = "⭐ Bookmarked";
   }
 }
-
 // 👥 Handle auth state
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (user) {
+    addAdviceSection.style.display = "block";
     loadAdvice(user);
   } else {
+    addAdviceSection.style.display = "none";
     adviceList.innerHTML = "<p>Please log in to view advice.</p>";
   }
 });
@@ -273,6 +275,9 @@ body {
     .bookmark-btn:hover {
       transform: scale(1.05);
     }
+    #add-advice-section {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -286,6 +291,7 @@ body {
   <button id="logout">Log Out</button>
 
   <p id="status"></p>
+<div id="add-advice-section">
 <h2>Add New Advice</h2>
 <form id="advice-form">
   <label>
@@ -310,7 +316,7 @@ body {
 
   <button type="submit">Add Advice</button>
 </form>
-
+</div>
 <hr>
 <div style="text-align: right; margin-bottom: 10px;">
   <button id="toggle-view">Show My Advice Only</button>
