@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Advice Board</title>
+  <script type="module">
+    // Import Firebase modules
+    import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, getDoc, getDocs, serverTimestamp, query, where, orderBy, onSnapshot } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC8i6009Q7MF8jKBk88-akVRUVhhuBVHSU",
+    authDomain: "advice-ad042.firebaseapp.com",
+    projectId: "advice-ad042",
+    storageBucket: "advice-ad042.firebasestorage.app",
+    messagingSenderId: "677646026777",
+    appId: "1:677646026777:web:8dd79e190d4d273b9fc288",
+    measurementId: "G-1BKY784SFB"
+  };
+
+  // Initialize Firebase
+  let app;
+  try {
+    app = getApp();
+  } catch (e) {
+    app = initializeApp(firebaseConfig);
+  }
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+  const adviceList = document.getElementById('advice-list');
+  const form = document.getElementById('advice-form');
+  const toggleBtn = document.getElementById("toggle-view");
+  let viewMode = "all"; // all | mine | bookmarked
+  let unsubscribe = null;
+  let currentUser = null;
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+  });
+
+// 🧠 Load advice (filtered or not)
+async function loadAdvice(user) {
+  if (unsubscribe) unsubscribe(); // stop previous listener
+
+  let q;
+  if (viewMode === "mine" && user) {
+    q = query(
+      collection(db, "advice"),
+      where("authorId", "==", user.uid),
+      orderBy("timestamp", "desc")
+    );
+  } else if (viewMode === "bookmarked" && user) {
+    // Load bookmarked advice IDs
+    const bookmarksRef = collection(db, "users", user.uid, "bookmarks");
+    const bookmarkSnap = await getDocs(bookmarksRef);
+    const bookmarkedIds = bookmarkSnap.docs.map((d) => d.id);
+
+    if (bookmarkedIds.length === 0) {
+      adviceList.innerHTML = "<p>No bookmarked advice yet.</p>";
+      return;
+    }
+
+    // Firestore can only handle up to 10 items in an 'in' query
+    const chunks = [];
+    for (let i = 0; i < bookmarkedIds.length; i += 10) {
+      chunks.push(bookmarkedIds.slice(i, i + 10));
+    }
+
+    adviceList.innerHTML = "";
+    chunks.forEach((chunk) => {
+      const qChunk = query(
+        collection(db, "advice"),
+        where("__name__", "in", chunk),
+        orderBy("timestamp", "desc")
+      );
+      onSnapshot(qChunk, (snapshot) => renderAdvice(snapshot, user));
+    });
+    return;
+    } else {
+    q = query(collection(db, "advice"), orderBy("timestamp", "desc"));
+  }
+
+  unsubscribe = onSnapshot(q, (snapshot) => renderAdvice(snapshot, user));
+}
+
+// 🧱 Render advice list
+async function renderAdvice(snapshot, user) {
+  adviceList.innerHTML = "";
+  if (snapshot.empty) {
+    adviceList.innerHTML = "<p>No advice found.</p>";
+    return;
+  }
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
+    const adviceId = docSnap.id;
+    const isMine = user && data.authorId === user.uid;
+    let isBookmarked = false;
+
+    if (user) {
+      const bookmarkRef = doc(db, "users", user.uid, "bookmarks", adviceId);
+      const bookmarkSnap = await getDoc(bookmarkRef);
+      isBookmarked = bookmarkSnap.exists();
+    }
+
+    const item = document.createElement("div");
+    item.classList.add("advice-item");
+    item.innerHTML = `
+      <h3>${data.title}</h3>
+      <p>${data.content}</p>
+      <p><em>– ${data.author || "Anonymous"}</em></p>
+      ${isMine ? "<p style='color: green; font-weight: bold;'>(Your advice)</p>" : ""}
+      <button class="bookmark-btn" data-id="${adviceId}">
+        ${isBookmarked ? "⭐ Bookmarked" : "☆ Bookmark"}
+      </button>
+      <hr>
+    `;
+    adviceList.appendChild(item);
+  }
+
+  // Attach listeners to all bookmark buttons
+  document.querySelectorAll(".bookmark-btn").forEach((btn) => {
+    btn.addEventListener("click", () => toggleBookmark(user, btn.dataset.id, btn));
+  });
+}
+
+// 🪄 Toggle bookmark
+async function toggleBookmark(user, adviceId, btn) {
+  const bookmarkRef = doc(db, "users", user.uid, "bookmarks", adviceId);
+  const snap = await getDoc(bookmarkRef);
+
+  if (snap.exists()) {
+    await deleteDoc(bookmarkRef);
+    btn.textContent = "☆ Bookmark";
+  } else {
+    await setDoc(bookmarkRef, { addedAt: new Date() });
+    btn.textContent = "⭐ Bookmarked";
+  }
+}
+
+// 👥 Handle auth state
+onAuthStateChanged(auth, (user) => {
+  currentUser = user;
+  if (user) {
+    loadAdvice(user);
+  } else {
+    adviceList.innerHTML = "<p>Please log in to view advice.</p>";
+  }
+});
+
+// 🔁 Toggle button logic (cycles through views)
+toggleBtn.addEventListener("click", () => {
+  if (viewMode === "all") {
+    viewMode = "mine";
+    toggleBtn.textContent = "Show Bookmarked Advice";
+  } else if (viewMode === "mine") {
+    viewMode = "bookmarked";
+    toggleBtn.textContent = "Show All Advice";
+  } else {
+    viewMode = "all";
+    toggleBtn.textContent = "Show My Advice Only";
+  }
+
+  if (currentUser) loadAdvice(currentUser);
+});
+
+  // ✏️ Add new advice
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const title = document.getElementById('title').value.trim();
+    const content = document.getElementById('content').value.trim();
+    const author = document.getElementById('author').value.trim();
+    const category = document.getElementById('category').value.trim();
+
+    if (!title || !content) {
+      alert("Title and content are required.");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "advice"), {
+        title,
+        content,
+        author: author || (currentUser ? currentUser.email : null),
+        authorId: currentUser ? currentUser.uid : null,
+        category: category || "Uncategorized",
+        timestamp: serverTimestamp()
+      });
+      alert("Advice added!");
+      form.reset();
+      loadAdvice(); // refresh the list
+    } catch (e) {
+      console.error("Error adding advice:", e);
+      alert("Error adding advice. See console for details.");
+    }
+  });
+
+  window.addEventListener('DOMContentLoaded', loadAdvice);
+</script>
+<script type="module" src="app.js"></script>
+  <style>
+ form {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+}
+
+input, textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+body {
+      font-family: system-ui, sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background: #fafafa;
+    }
+    h1 { text-align: center; }
+    .advice-item {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin: 0 0 8px;
+    }
+    p { margin: 6px 0; }
+    #toggle-view {
+      background-color: #6c757d;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #toggle-view:hover {
+      background-color: #5a6268;
+    }
+    .bookmark-btn {
+      background: none;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      color: #ff9800;
+      margin-top: 6px;
+    }
+    .bookmark-btn:hover {
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <h1>Advice Board</h1>
+
+  <h2>Login / Signup</h2>
+  <input id="email" type="email" placeholder="Email"><br>
+  <input id="password" type="password" placeholder="Password"><br>
+  <button id="signup">Sign Up</button>
+  <button id="login">Log In</button>
+  <button id="logout">Log Out</button>
+
+  <p id="status"></p>
+<h2>Add New Advice</h2>
+<form id="advice-form">
+  <label>
+    Title:<br>
+    <input type="text" id="title" required>
+  </label><br><br>
+
+  <label>
+    Content:<br>
+    <textarea id="content" rows="4" required></textarea>
+  </label><br><br>
+
+  <label>
+    Author (optional):<br>
+    <input type="text" id="author">
+  </label><br><br>
+
+  <label>
+    Category:<br>
+    <input type="text" id="category">
+  </label><br><br>
+
+  <button type="submit">Add Advice</button>
+</form>
+
+<hr>
+<div style="text-align: right; margin-bottom: 10px;">
+  <button id="toggle-view">Show My Advice Only</button>
+</div>
+
+<h2>Advice Board</h2>
+<div id="advice-list"></div>
+  <div id="advice-list"></div>
+</body>
+</html>
