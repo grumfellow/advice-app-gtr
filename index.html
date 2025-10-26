@@ -224,30 +224,33 @@ async function loadCategories() {
   }
 }
 
-  async function saveFeedback(adviceId, userId, rating, comment, userName) {
-    const feedbackRef = doc(db, "advice", adviceId, "feedback", userId);
-    await setDoc(feedbackRef, {
-      rating,
-      comment,
-      userId,
-      userName,
-      timestamp: serverTimestamp()
-    }, { merge: true }); // allows updating rating or comment separately
-  }
+async function saveFeedback(adviceId, userId, rating, comment, userName) {
+  const feedbackRef = doc(db, "advice", adviceId, "feedback", userId);
+  const data = {
+    userId,
+    userName,
+    timestamp: serverTimestamp()
+  };
+  if (rating !== null && rating !== undefined) data.rating = rating;
+  if (comment) data.comment = comment;
 
-  async function loadFeedback(adviceId) {
-    const feedbackCol = collection(db, "advice", adviceId, "feedback");
-    const snapshot = await getDocs(feedbackCol);
-    return snapshot.docs.map(doc => doc.data());
-  }
+  await setDoc(feedbackRef, data, { merge: true });
+}
 
-  function calculateAverageRating(feedbackList) {
-    const ratings = feedbackList
-      .map(f => f.rating)
-      .filter(r => typeof r === 'number');
-    if (!ratings.length) return 0;
-    return ratings.reduce((a,b) => a+b, 0) / ratings.length;
-  }
+
+async function loadFeedback(adviceId) {
+  const feedbackCol = collection(db, "advice", adviceId, "feedback");
+  const snapshot = await getDocs(feedbackCol);
+  return snapshot.docs.map(doc => doc.data());
+}
+
+function calculateAverageRating(feedbackList) {
+  const ratings = feedbackList
+    .map(f => f.rating)
+    .filter(r => typeof r === 'number');
+  if (!ratings.length) return 0;
+  return ratings.reduce((a,b) => a+b, 0) / ratings.length;
+}
 
 function createStarElements(container, currentRating = 0) {
   container.innerHTML = "";
@@ -364,6 +367,37 @@ window.addEventListener("DOMContentLoaded", () => {
   loadCategories();
   loadAdvice();
 });
+
+// Handle manual comment saving
+document.addEventListener('click', async (e) => {
+  if (e.target.classList.contains('save-feedback-btn')) {
+    const section = e.target.closest('.feedback-section');
+    const adviceId = section.dataset.adviceId;
+    const commentInput = section.querySelector('.comment-input');
+    const comment = commentInput.value.trim();
+    const userId = currentUser?.uid;
+    const userName = currentUser?.displayName || currentUser?.email || "Anonymous";
+
+    if (!userId) {
+      alert("Please log in to leave a comment.");
+      return;
+    }
+    if (!comment) {
+      alert("Please write a comment first!");
+      return;
+    }
+
+    try {
+      // Save comment (without changing rating)
+      await saveFeedback(adviceId, userId, null, comment, userName);
+      commentInput.value = "";
+      showFeedback(adviceId, section); // refresh immediately
+    } catch (err) {
+      console.error("Error saving comment:", err);
+    }
+  }
+});
+
 </script>
 <script type="module" src="app.js"></script>
   <style>
