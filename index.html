@@ -206,6 +206,24 @@ async function loadCategories() {
       }
     });
 
+    // Clear existing (except "All Categories")
+    categorySelect.innerHTML = '<option value="">All Categories</option>';
+
+    // Add each category alphabetically
+    Array.from(categories)
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(cat => {
+        const option = document.createElement("option");
+        option.value = cat;
+        option.textContent = cat;
+        categorySelect.appendChild(option);
+      });
+
+  } catch (e) {
+    console.error("Error loading categories:", e);
+  }
+}
+
   async function saveFeedback(adviceId, userId, rating, comment, userName) {
     const feedbackRef = doc(db, "advice", adviceId, "feedback", userId);
     await setDoc(feedbackRef, {
@@ -231,24 +249,6 @@ async function loadCategories() {
     return ratings.reduce((a,b) => a+b, 0) / ratings.length;
   }
 
-    // Clear existing (except "All Categories")
-    categorySelect.innerHTML = '<option value="">All Categories</option>';
-
-    // Add each category alphabetically
-    Array.from(categories)
-      .sort((a, b) => a.localeCompare(b))
-      .forEach(cat => {
-        const option = document.createElement("option");
-        option.value = cat;
-        option.textContent = cat;
-        categorySelect.appendChild(option);
-      });
-
-  } catch (e) {
-    console.error("Error loading categories:", e);
-  }
-}
-
 function createStarElements(container, currentRating = 0) {
   container.innerHTML = "";
   for (let i = 1; i <= 10; i++) {
@@ -265,17 +265,27 @@ function attachStarListeners(container, adviceId, userId, userName) {
   container.querySelectorAll(".star").forEach(star => {
     star.addEventListener("click", async () => {
       const rating = parseInt(star.dataset.value);
-      const comment = container.parentElement.querySelector(".comment-input").value.trim();
-      await saveFeedback(adviceId, userId, rating, comment, userName);
+      
+      // Update the visual state immediately
       updateStars(container, rating);
-      alert("Feedback saved!");
+      
+      // Save to Firestore (non-blocking UI)
+      const comment = container.closest(".feedback-section").querySelector(".comment-input").value.trim();
+      try {
+        await saveFeedback(adviceId, userId, rating, comment, userName);
+        console.log(`Saved rating ${rating} for ${adviceId}`);
+      } catch (err) {
+        console.error("Error saving feedback:", err);
+      }
     });
   });
 }
 
 function updateStars(container, rating) {
-  container.querySelectorAll(".star").forEach(star => {
-    star.classList.toggle("selected", parseInt(star.dataset.value) <= rating);
+  const stars = container.querySelectorAll(".star");
+  stars.forEach(star => {
+    const value = parseInt(star.dataset.value);
+    star.classList.toggle("selected", value <= rating);
   });
 }
 
@@ -287,17 +297,23 @@ async function showFeedback(adviceId, container) {
     return;
   }
 
-  // Average rating
+  // Show average
   const ratings = feedbackList.filter(f => typeof f.rating === "number").map(f => f.rating);
   const avg = ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : "–";
   container.querySelector(".avg-rating").textContent = `Average: ${avg}`;
 
-  // Comments
+  // Show comments
   const commentsDiv = container.querySelector(".comments-list");
   commentsDiv.innerHTML = feedbackList
     .filter(f => f.comment)
     .map(f => `<p><strong>${f.userName || "Anon"}:</strong> ${f.comment}</p>`)
     .join("");
+
+  // Show user's rating (if logged in)
+  const userFeedback = feedbackList.find(f => f.userId === currentUser?.uid);
+  if (userFeedback?.rating) {
+    updateStars(container.querySelector(".stars"), userFeedback.rating);
+  }
 }
 
 // 👥 Handle auth state
