@@ -31,21 +31,44 @@
   const auth = getAuth(app);
   const adviceList = document.getElementById('advice-list');
   const form = document.getElementById('advice-form');
-  const toggleBtn = document.getElementById("toggle-view");
+  const buttons = {
+    all: document.getElementById("btn-all"),
+    my: document.getElementById("btn-my"),
+    bookmarked: document.getElementById("btn-bookmarked")
+  };
   const addAdviceSection = document.getElementById("add-advice-section");
-  let viewMode = "all"; // all | mine | bookmarked
+  let viewMode = "all"; // all | my | bookmarked
   let unsubscribe = null;
   let currentUser = null;
   onAuthStateChanged(auth, (user) => {
     currentUser = user;
   });
 
+  function setActiveView(view) {
+    // Update appearance
+    Object.entries(buttons).forEach(([key, btn]) => {
+      const isActive = key === view;
+      btn.classList.toggle("selected", isActive);
+      btn.disabled = isActive; // prevent clicking again
+    });
+    loadAdvice(currentUser, view);
+  }
+
+// Attach event listeners to view buttons
+buttons.all.addEventListener("click", () => setActiveView("all"));
+buttons.my.addEventListener("click", () => setActiveView("my"));
+buttons.bookmarked.addEventListener("click", () => setActiveView("bookmarked"));
+
+
+// Initialize
+setActiveView("all");
+
 // 🧠 Load advice (filtered or not)
-async function loadAdvice(user) {
+async function loadAdvice(user, viewMode = "all") {
   if (unsubscribe) unsubscribe(); // stop previous listener
 
   let q;
-  if (viewMode === "mine" && user) {
+  if (viewMode === "my" && user) {
     q = query(
       collection(db, "advice"),
       where("authorId", "==", user.uid),
@@ -139,6 +162,7 @@ async function toggleBookmark(user, adviceId, btn) {
     btn.textContent = "⭐ Bookmarked";
   }
 }
+
 // 👥 Handle auth state
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
@@ -149,22 +173,6 @@ onAuthStateChanged(auth, (user) => {
     addAdviceSection.style.display = "none";
     adviceList.innerHTML = "<p>Please log in to view advice.</p>";
   }
-});
-
-// 🔁 Toggle button logic (cycles through views)
-toggleBtn.addEventListener("click", () => {
-  if (viewMode === "all") {
-    viewMode = "mine";
-    toggleBtn.textContent = "Show Bookmarked Advice";
-  } else if (viewMode === "mine") {
-    viewMode = "bookmarked";
-    toggleBtn.textContent = "Show All Advice";
-  } else {
-    viewMode = "all";
-    toggleBtn.textContent = "Show My Advice Only";
-  }
-
-  if (currentUser) loadAdvice(currentUser);
 });
 
   // ✏️ Add new advice
@@ -278,6 +286,35 @@ body {
     #add-advice-section {
       display: none;
     }
+
+    .view-btn {
+  padding: 8px 16px;
+  margin-right: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #f4f4f4;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.view-btn:hover:not(:disabled) {
+  background-color: #e4e4e4;
+}
+
+.view-btn:disabled {
+  opacity: 1; /* keep readable */
+  cursor: not-allowed;
+}
+
+/* Selected (active) state */
+#view-buttons .view-btn.selected,
+#view-buttons .view-btn.selected:disabled {
+  background-color: #cce5ff !important; /* light blue background */
+  color: #004085 !important;            /* dark blue text */
+  border-color: #66b0ff !important;     /* slightly brighter border */
+  font-weight: 600;
+}
   </style>
 </head>
 <body>
@@ -318,8 +355,11 @@ body {
 </form>
 </div>
 <hr>
-<div style="text-align: right; margin-bottom: 10px;">
-  <button id="toggle-view">Show My Advice Only</button>
+
+<div id="view-buttons">
+  <button id="btn-all" class="view-btn">All Advice</button>
+  <button id="btn-my" class="view-btn">My Advice</button>
+  <button id="btn-bookmarked" class="view-btn">Bookmarked</button>
 </div>
 
 <h2>Advice Board</h2>
