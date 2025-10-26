@@ -9,6 +9,7 @@
     import { getFirestore, collection, doc, setDoc, deleteDoc, getDoc, getDocs, serverTimestamp, query, where, orderBy, onSnapshot } 
       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    // import { db } from "./firebase";
 
   const firebaseConfig = {
     apiKey: "AIzaSyC8i6009Q7MF8jKBk88-akVRUVhhuBVHSU",
@@ -153,9 +154,21 @@ async function renderAdvice(snapshot, user) {
       <button class="bookmark-btn" data-id="${adviceId}">
         ${isBookmarked ? "⭐ Bookmarked" : "☆ Bookmark"}
       </button>
+      <div class="feedback-section" data-advice-id="${adviceId}">
+        <div class="stars"></div>
+        <textarea class="comment-input" placeholder="Leave a comment..."></textarea>
+        <button class="save-feedback-btn">Save</button>
+        <div class="avg-rating"></div>
+        <div class="comments-list"></div>
+      </div>
       <hr>
     `;
     adviceList.appendChild(item);
+    const feedbackSection = item.querySelector(".feedback-section");
+    const starsContainer = feedbackSection.querySelector(".stars");
+    createStarElements(starsContainer);
+    attachStarListeners(starsContainer, adviceId, user?.uid, user?.displayName || "Anonymous");
+    showFeedback(adviceId, feedbackSection);
   }
 
   // Attach listeners to all bookmark buttons
@@ -193,6 +206,31 @@ async function loadCategories() {
       }
     });
 
+  async function saveFeedback(adviceId, userId, rating, comment, userName) {
+    const feedbackRef = doc(db, "advice", adviceId, "feedback", userId);
+    await setDoc(feedbackRef, {
+      rating,
+      comment,
+      userId,
+      userName,
+      timestamp: serverTimestamp()
+    }, { merge: true }); // allows updating rating or comment separately
+  }
+
+  async function loadFeedback(adviceId) {
+    const feedbackCol = collection(db, "advice", adviceId, "feedback");
+    const snapshot = await getDocs(feedbackCol);
+    return snapshot.docs.map(doc => doc.data());
+  }
+
+  function calculateAverageRating(feedbackList) {
+    const ratings = feedbackList
+      .map(f => f.rating)
+      .filter(r => typeof r === 'number');
+    if (!ratings.length) return 0;
+    return ratings.reduce((a,b) => a+b, 0) / ratings.length;
+  }
+
     // Clear existing (except "All Categories")
     categorySelect.innerHTML = '<option value="">All Categories</option>';
 
@@ -209,6 +247,57 @@ async function loadCategories() {
   } catch (e) {
     console.error("Error loading categories:", e);
   }
+}
+
+function createStarElements(container, currentRating = 0) {
+  container.innerHTML = "";
+  for (let i = 1; i <= 10; i++) {
+    const star = document.createElement("span");
+    star.classList.add("star");
+    star.textContent = "★";
+    if (i <= currentRating) star.classList.add("selected");
+    star.dataset.value = i;
+    container.appendChild(star);
+  }
+}
+
+function attachStarListeners(container, adviceId, userId, userName) {
+  container.querySelectorAll(".star").forEach(star => {
+    star.addEventListener("click", async () => {
+      const rating = parseInt(star.dataset.value);
+      const comment = container.parentElement.querySelector(".comment-input").value.trim();
+      await saveFeedback(adviceId, userId, rating, comment, userName);
+      updateStars(container, rating);
+      alert("Feedback saved!");
+    });
+  });
+}
+
+function updateStars(container, rating) {
+  container.querySelectorAll(".star").forEach(star => {
+    star.classList.toggle("selected", parseInt(star.dataset.value) <= rating);
+  });
+}
+
+async function showFeedback(adviceId, container) {
+  const feedbackList = await loadFeedback(adviceId);
+  
+  if (!feedbackList.length) {
+    container.querySelector(".avg-rating").textContent = "No ratings yet";
+    return;
+  }
+
+  // Average rating
+  const ratings = feedbackList.filter(f => typeof f.rating === "number").map(f => f.rating);
+  const avg = ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : "–";
+  container.querySelector(".avg-rating").textContent = `Average: ${avg}`;
+
+  // Comments
+  const commentsDiv = container.querySelector(".comments-list");
+  commentsDiv.innerHTML = feedbackList
+    .filter(f => f.comment)
+    .map(f => `<p><strong>${f.userName || "Anon"}:</strong> ${f.comment}</p>`)
+    .join("");
 }
 
 // 👥 Handle auth state
@@ -378,6 +467,25 @@ body {
 #category-select:hover {
   background-color: #e4e4e4;
 }
+
+.star {
+  font-size: 20px;
+  color: gray;
+  cursor: pointer;
+}
+.star.selected {
+  color: gold;
+}
+.feedback-section {
+  margin-top: 8px;
+}
+.comment-input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px;
+}
+
   </style>
 </head>
 <body>
@@ -430,6 +538,5 @@ body {
 
 <h2>Advice Board</h2>
 <div id="advice-list"></div>
-  <div id="advice-list"></div>
 </body>
 </html>
