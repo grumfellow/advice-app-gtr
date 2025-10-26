@@ -44,27 +44,36 @@
     currentUser = user;
   });
 
-  function setActiveView(view) {
+  function setActiveView(view, category = null) {
     // Update appearance
     Object.entries(buttons).forEach(([key, btn]) => {
       const isActive = key === view;
       btn.classList.toggle("selected", isActive);
       btn.disabled = isActive; // prevent clicking again
     });
-    loadAdvice(currentUser, view);
+
+    // Reset dropdown style if leaving category view
+    if (view !== "category") categorySelect.value = "";
+
+    loadAdvice(currentUser, view, category);
   }
 
 // Attach event listeners to view buttons
 buttons.all.addEventListener("click", () => setActiveView("all"));
 buttons.my.addEventListener("click", () => setActiveView("my"));
 buttons.bookmarked.addEventListener("click", () => setActiveView("bookmarked"));
+const categorySelect = document.getElementById("category-select");
+categorySelect.addEventListener("change", () => {
+  const selectedCategory = categorySelect.value;
+  setActiveView(selectedCategory ? "category" : "all", selectedCategory);
+});
 
 
 // Initialize
 setActiveView("all");
 
 // 🧠 Load advice (filtered or not)
-async function loadAdvice(user, viewMode = "all") {
+async function loadAdvice(user, viewMode = "all", category = null) {
   if (unsubscribe) unsubscribe(); // stop previous listener
 
   let q;
@@ -101,7 +110,13 @@ async function loadAdvice(user, viewMode = "all") {
       onSnapshot(qChunk, (snapshot) => renderAdvice(snapshot, user));
     });
     return;
-    } else {
+  } else if (viewMode === "category" && category) {
+    q = query(
+      collection(db, "advice"),
+      where("category", "==", category),
+      orderBy("timestamp", "desc")
+    );
+  } else {
     q = query(collection(db, "advice"), orderBy("timestamp", "desc"));
   }
 
@@ -315,6 +330,18 @@ body {
   border-color: #66b0ff !important;     /* slightly brighter border */
   font-weight: 600;
 }
+
+#category-select {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #f4f4f4;
+  cursor: pointer;
+}
+
+#category-select:hover {
+  background-color: #e4e4e4;
+}
   </style>
 </head>
 <body>
@@ -360,6 +387,14 @@ body {
   <button id="btn-all" class="view-btn">All Advice</button>
   <button id="btn-my" class="view-btn">My Advice</button>
   <button id="btn-bookmarked" class="view-btn">Bookmarked</button>
+  <select id="category-select" class="view-btn">
+    <option value="">All Categories</option>
+    <option value="Relationships">Relationships</option>
+    <option value="Career">Career</option>
+    <option value="Health">Health</option>
+    <option value="Finance">Finance</option>
+    <option value="Other">Other</option>
+  </select>
 </div>
 
 <h2>Advice Board</h2>
