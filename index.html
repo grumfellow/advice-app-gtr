@@ -178,6 +178,39 @@ async function toggleBookmark(user, adviceId, btn) {
   }
 }
 
+async function loadCategories() {
+  const categorySelect = document.getElementById("category-select");
+  const adviceRef = collection(db, "advice");
+
+  try {
+    const snapshot = await getDocs(adviceRef);
+    const categories = new Set();
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.category && data.category.trim() !== "") {
+        categories.add(data.category.trim());
+      }
+    });
+
+    // Clear existing (except "All Categories")
+    categorySelect.innerHTML = '<option value="">All Categories</option>';
+
+    // Add each category alphabetically
+    Array.from(categories)
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(cat => {
+        const option = document.createElement("option");
+        option.value = cat;
+        option.textContent = cat;
+        categorySelect.appendChild(option);
+      });
+
+  } catch (e) {
+    console.error("Error loading categories:", e);
+  }
+}
+
 // 👥 Handle auth state
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
@@ -222,7 +255,10 @@ onAuthStateChanged(auth, (user) => {
     }
   });
 
-  window.addEventListener('DOMContentLoaded', loadAdvice);
+window.addEventListener("DOMContentLoaded", () => {
+  loadCategories();
+  loadAdvice();
+});
 </script>
 <script type="module" src="app.js"></script>
   <style>
@@ -389,11 +425,6 @@ body {
   <button id="btn-bookmarked" class="view-btn">Bookmarked</button>
   <select id="category-select" class="view-btn">
     <option value="">All Categories</option>
-    <option value="Relationships">Relationships</option>
-    <option value="Career">Career</option>
-    <option value="Health">Health</option>
-    <option value="Finance">Finance</option>
-    <option value="Other">Other</option>
   </select>
 </div>
 
