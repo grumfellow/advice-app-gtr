@@ -32,46 +32,26 @@
   const auth = getAuth(app);
   const adviceList = document.getElementById('advice-list');
   const form = document.getElementById('advice-form');
-  const buttons = {
-    all: document.getElementById("btn-all"),
-    my: document.getElementById("btn-my"),
-    bookmarked: document.getElementById("btn-bookmarked")
-  };
+  const loginSection = document.getElementById("login-section");
+  const loggedInSection = document.getElementById("logged-in-section");
+  const userInfo = document.getElementById("user-info");
+  const logoutBtn = document.getElementById("logout-btn");
   const addAdviceSection = document.getElementById("add-advice-section");
-  let viewMode = "all"; // all | my | bookmarked
+  const filters = document.getElementById("filters");
   let unsubscribe = null;
   let currentUser = null;
-  onAuthStateChanged(auth, (user) => {
-    currentUser = user;
-  });
 
-  function setActiveView(view, category = null) {
-    // Update appearance
-    Object.entries(buttons).forEach(([key, btn]) => {
-      const isActive = key === view;
-      btn.classList.toggle("selected", isActive);
-      btn.disabled = isActive; // prevent clicking again
-    });
-
-    // Reset dropdown style if leaving category view
-    if (view !== "category") categorySelect.value = "";
-
-    loadAdvice(currentUser, view, category);
-  }
-
-// Attach event listeners to view buttons
-buttons.all.addEventListener("click", () => setActiveView("all"));
-buttons.my.addEventListener("click", () => setActiveView("my"));
-buttons.bookmarked.addEventListener("click", () => setActiveView("bookmarked"));
 const categorySelect = document.getElementById("category-select");
+const filterMy = document.getElementById("filter-my");
+const filterBookmarked = document.getElementById("filter-bookmarked");
 categorySelect.addEventListener("change", () => {
   const selectedCategory = categorySelect.value;
-  setActiveView(selectedCategory ? "category" : "all", selectedCategory);
 });
-
-
-// Initialize
-setActiveView("all");
+[filterMy, filterBookmarked, categorySelect].forEach(el => {
+  el.addEventListener("change", () => {
+    applyFilters();
+  });
+});
 
 // 🧠 Load advice (filtered or not)
 async function loadAdvice(user, viewMode = "all", category = null) {
@@ -195,6 +175,55 @@ async function renderAdvice(snapshot, user) {
       } catch (err) {
         console.error("Error deleting advice:", err);
         alert("Error deleting advice. See console for details.");
+      }
+    });
+  });
+}
+
+async function renderAdviceFromDocs(docArray) {
+  adviceList.innerHTML = "";
+  if (!docArray.length) {
+    adviceList.innerHTML = "<p>No advice found.</p>";
+    return;
+  }
+
+  for (const docSnap of docArray) {
+    const data = docSnap.data();
+    const adviceId = docSnap.id;
+    const item = document.createElement("div");
+    item.classList.add("advice-item");
+    item.innerHTML = `
+      <h3>${data.title}</h3>
+      <p>${data.content}</p>
+      <p><em>– ${data.author || "Anonymous"}</em></p>
+      <button class="bookmark-btn" data-id="${adviceId}">☆ Bookmark</button>
+      <button class="delete-btn" data-id="${adviceId}">🗑️ Delete</button>
+      <div class="feedback-section" data-advice-id="${adviceId}">
+        <div class="stars"></div>
+        <textarea class="comment-input" placeholder="Leave a comment..."></textarea>
+        <button class="save-feedback-btn">Save</button>
+        <div class="avg-rating"></div>
+        <div class="comments-list"></div>
+      </div>
+      <hr>
+    `;
+    adviceList.appendChild(item);
+    const feedbackSection = item.querySelector(".feedback-section");
+    const starsContainer = feedbackSection.querySelector(".stars");
+    createStarElements(starsContainer);
+    attachStarListeners(starsContainer, adviceId, currentUser?.uid, currentUser?.displayName || "Anonymous");
+    showFeedback(adviceId, feedbackSection);
+  }
+
+  // attach listeners to bookmark & delete buttons again
+  document.querySelectorAll(".bookmark-btn").forEach((btn) => {
+    btn.addEventListener("click", () => toggleBookmark(currentUser, btn.dataset.id, btn));
+  });
+  document.querySelectorAll(".delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (confirm("Are you sure you want to delete this advice?")) {
+        await deleteDoc(doc(db, "advice", btn.dataset.id));
+        applyFilters(); // refresh list
       }
     });
   });
@@ -342,14 +371,58 @@ async function showFeedback(adviceId, container) {
   }
 }
 
+async function applyFilters() {
+  if (!currentUser) {
+    adviceList.innerHTML = "<p>Please log in to view advice.</p>";
+    return;
+  }
+
+  const showMine = filterMy.checked;
+  const showBookmarked = filterBookmarked.checked;
+  const category = categorySelect.value;
+
+  // Load all advice first
+  const adviceRef = collection(db, "advice");
+  const allSnap = await getDocs(adviceRef);
+  let adviceDocs = allSnap.docs;
+
+  // Apply "Added By Me" filter
+  if (showMine) {
+    adviceDocs = adviceDocs.filter(d => d.data().authorId === currentUser.uid);
+  }
+
+  // Apply "Bookmarked" filter
+  if (showBookmarked) {
+    const bookmarksRef = collection(db, "users", currentUser.uid, "bookmarks");
+    const bookmarkSnap = await getDocs(bookmarksRef);
+    const bookmarkedIds = bookmarkSnap.docs.map(b => b.id);
+    adviceDocs = adviceDocs.filter(d => bookmarkedIds.includes(d.id));
+  }
+
+  // Apply category filter
+  if (category) {
+    adviceDocs = adviceDocs.filter(d => d.data().category === category);
+  }
+
+  renderAdviceFromDocs(adviceDocs);
+}
+
 // 👥 Handle auth state
 onAuthStateChanged(auth, (user) => {
-  currentUser = user;
+    currentUser = user;
   if (user) {
+    // User is logged in
+    loginSection.style.display = "none";
+    loggedInSection.style.display = "block";
     addAdviceSection.style.display = "block";
+    filters.classList.remove("hidden");
     loadAdvice(user);
   } else {
+    // User is logged out
+    loginSection.style.display = "block";
+    loggedInSection.style.display = "none";
     addAdviceSection.style.display = "none";
+    filters.classList.add("hidden");
     adviceList.innerHTML = "<p>Please log in to view advice.</p>";
   }
 });
@@ -388,7 +461,7 @@ onAuthStateChanged(auth, (user) => {
 
 window.addEventListener("DOMContentLoaded", () => {
   loadCategories();
-  loadAdvice();
+  applyFilters();
 });
 
 // Handle manual comment saving
@@ -572,20 +645,46 @@ body {
   color: #c0392b;
 }
 
+#filters {
+  display: flex;
+  align-items: center;
+  gap: 16px; /* space between filters */
+  margin-bottom: 16px;
+  flex-wrap: wrap; /* so it wraps gracefully on small screens */
+}
+
+#filters input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+#filters label,
+#filters select {
+  font-size: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
   </style>
 </head>
 <body>
   <h1>Advice Board</h1>
 
-  <h2>Login / Signup</h2>
-  <input id="email" type="email" placeholder="Email"><br>
-  <input id="password" type="password" placeholder="Password"><br>
-  <button id="signup">Sign Up</button>
+<!-- LOGIN FORM (shown when logged out) -->
+<div id="login-section">
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
   <button id="login">Log In</button>
-  <button id="logout">Log Out</button>
+  <button id="signup">Sign Up</button>
+</div>
 
+<!-- LOGGED-IN CONTROLS -->
+<div id="logged-in-section" style="display:none;">
   <p id="status"></p>
-<div id="add-advice-section">
+  <button id="logout">Log Out</button>
+</div>
+
+  <div id="add-advice-section">
 <h2>Add New Advice</h2>
 <form id="advice-form">
   <label>
@@ -613,13 +712,14 @@ body {
 </div>
 <hr>
 
-<div id="view-buttons">
-  <button id="btn-all" class="view-btn">All Advice</button>
-  <button id="btn-my" class="view-btn">My Advice</button>
-  <button id="btn-bookmarked" class="view-btn">Bookmarked</button>
-  <select id="category-select" class="view-btn">
-    <option value="">All Categories</option>
-  </select>
+<div id="filters">
+  <label><input type="checkbox" id="filter-my"> Added By Me</label>
+  <label><input type="checkbox" id="filter-bookmarked"> Bookmarked</label>
+  <label>Category:
+    <select id="category-select" class="view-btn">
+      <option value="">All Categories</option>
+    </select>
+  </label>
 </div>
 
 <h2>Advice Board</h2>
