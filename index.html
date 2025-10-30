@@ -143,7 +143,9 @@ async function renderAdvice(snapshot, user) {
       <h3>${data.title}</h3>
       <p>${data.content}</p>
       <p><em>– ${data.author || "Anonymous"}</em></p>
-      <p class="category-label">${data.category ? data.category : "Uncategorized"}</p>
+      <p class="category-label" data-category="${data.category || 'Uncategorized'}">
+        ${data.category || "Uncategorized"}
+      </p>
       ${isMine ? "<p style='color: green; font-weight: bold;'>(Your advice)</p>" : ""}
       <button class="bookmark-btn" data-id="${adviceId}">
         ${isBookmarked ? "⭐ Bookmarked" : "☆ Bookmark"}
@@ -197,6 +199,19 @@ async function renderAdvice(snapshot, user) {
     loadMoreBtn.style.display =
       snapshot.docs.length === 10 ? "inline-block" : "none";
   }
+    // 🏷️ Clickable category filter
+  document.querySelectorAll(".category-label").forEach(label => {
+    label.addEventListener("click", () => {
+      const category = label.dataset.category;
+      const select = document.getElementById("category-select");
+
+      // Set dropdown to that category
+      select.value = category === "Uncategorized" ? "" : category;
+
+      // Apply filters with that category
+      applyFilters();
+    });
+  });
 }
 
 async function renderAdviceFromDocs(docArray) {
@@ -215,7 +230,9 @@ async function renderAdviceFromDocs(docArray) {
       <h3>${data.title}</h3>
       <p>${data.content}</p>
       <p><em>– ${data.author || "Anonymous"}</em></p>
-      <p class="category-label">${data.category ? data.category : "Uncategorized"}</p>
+      <p class="category-label" data-category="${data.category || 'Uncategorized'}">
+        ${data.category || "Uncategorized"}
+      </p>
       <button class="bookmark-btn" data-id="${adviceId}">☆ Bookmark</button>
       <button class="delete-btn" data-id="${adviceId}">🗑️ Delete</button>
       <div class="feedback-section" data-advice-id="${adviceId}">
@@ -245,6 +262,19 @@ async function renderAdviceFromDocs(docArray) {
         await deleteDoc(doc(db, "advice", btn.dataset.id));
         applyFilters(); // refresh list
       }
+    });
+  });
+    // 🏷️ Clickable category filter
+  document.querySelectorAll(".category-label").forEach(label => {
+    label.addEventListener("click", () => {
+      const category = label.dataset.category;
+      const select = document.getElementById("category-select");
+
+      // Set dropdown to that category
+      select.value = category === "Uncategorized" ? "" : category;
+
+      // Apply filters with that category
+      applyFilters();
     });
   });
 }
@@ -814,6 +844,12 @@ body {
   padding: 2px 8px;
   border-radius: 12px;
   margin-top: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+.category-label:hover {
+  background-color: #e6f0ff;
+  color: #004085;
 }
 
   </style>
