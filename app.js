@@ -31,7 +31,11 @@ document.getElementById("login").onclick = async () => {
 };
 
 document.getElementById("logout").onclick = async () => {
-  await signOut(auth);
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.warn("Sign-out completed; ignoring blocked request:", error);
+  }
 };
 
 onAuthStateChanged(auth, user => {

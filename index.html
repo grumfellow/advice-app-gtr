@@ -6,7 +6,8 @@
   <script type="module">
     // Import Firebase modules
     import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, deleteDoc, getDoc, getDocs, serverTimestamp, query, where, orderBy, onSnapshot } 
+    import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, getDoc, getDocs, serverTimestamp, 
+            query, where, orderBy, onSnapshot, limit, startAfter } 
       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     // import { db } from "./firebase";
@@ -39,6 +40,11 @@
   const addAdviceSection = document.getElementById("add-advice-section");
   const filters = document.getElementById("filters");
   let unsubscribe = null;
+  let lastVisible = null;
+  let filteredDocs = [];
+  let currentPage = 0;
+  const PAGE_SIZE = 10;
+  let currentQuery = null;
   let currentUser = null;
 
 const categorySelect = document.getElementById("category-select");
@@ -101,7 +107,14 @@ async function loadAdvice(user, viewMode = "all", category = null) {
     q = query(collection(db, "advice"), orderBy("timestamp", "desc"));
   }
 
-  unsubscribe = onSnapshot(q, (snapshot) => renderAdvice(snapshot, user));
+  q = query(q, limit(10)); // limit to 10 per load
+  unsubscribe = onSnapshot(q, (snapshot) => {
+    renderAdvice(snapshot, user);
+    if (snapshot.docs.length > 0) {
+      lastVisible = snapshot.docs[snapshot.docs.length - 1];
+      currentQuery = q;
+    }
+  });
 }
 
 // 🧱 Render advice list
@@ -171,13 +184,18 @@ async function renderAdvice(snapshot, user) {
       try {
         await deleteDoc(doc(db, "advice", adviceId));
         alert("Advice deleted!");
-        loadAdvice(user, viewMode); // refresh list
+        loadAdvice(user); // refresh list
       } catch (err) {
         console.error("Error deleting advice:", err);
         alert("Error deleting advice. See console for details.");
       }
     });
   });
+  const loadMoreBtn = document.getElementById("load-more-btn");
+  if (loadMoreBtn) {
+    loadMoreBtn.style.display =
+      snapshot.docs.length === 10 ? "inline-block" : "none";
+  }
 }
 
 async function renderAdviceFromDocs(docArray) {
@@ -404,7 +422,32 @@ async function applyFilters() {
     adviceDocs = adviceDocs.filter(d => d.data().category === category);
   }
 
-  renderAdviceFromDocs(adviceDocs);
+  filteredDocs = adviceDocs; // store all matching docs
+  currentPage = 0;
+  renderPaginatedAdvice();
+
+}
+
+function renderPaginatedAdvice() {
+  const start = currentPage * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const docsToShow = filteredDocs.slice(start, end);
+
+  renderAdviceFromDocs(docsToShow);
+
+  const loadMoreBtn = document.getElementById("load-more-btn");
+  if (filteredDocs.length > end) {
+    loadMoreBtn.style.display = "inline-block";
+  } else {
+    loadMoreBtn.style.display = "none";
+  }
+}
+
+function loadMoreAdvice() {
+  if (!filteredDocs.length) return;
+
+  currentPage++;
+  renderPaginatedAdvice();
 }
 
 // 👥 Handle auth state
@@ -493,6 +536,18 @@ document.addEventListener('click', async (e) => {
     }
   }
 });
+// -------------------------------------------------
+//  COLLAPSE / EXPAND ADD-ADVICE PANEL
+// -------------------------------------------------
+const toggleBtn   = document.getElementById('toggle-add-advice');
+const panel       = document.getElementById('add-advice-section');
+
+toggleBtn.addEventListener('click', () => {
+  const isOpen = panel.classList.toggle('open');
+  toggleBtn.setAttribute('aria-expanded', isOpen);
+});
+
+document.getElementById("load-more-btn").addEventListener("click", loadMoreAdvice);
 
 </script>
 <script type="module" src="app.js"></script>
@@ -529,7 +584,7 @@ button:hover {
 
 body {
       font-family: system-ui, sans-serif;
-      max-width: 700px;
+      /* max-width: 700px; */
       margin: 40px auto;
       padding: 0 20px;
       background: #fafafa;
@@ -665,6 +720,90 @@ body {
 .hidden {
   display: none !important;
 }
+
+#content-wrapper {
+  display: flex;
+  height: 60vh; /* Adjust this value (e.g., 70vh or 500px) based on your page's header height and testing. This limits the container so columns can scroll independently. */
+  border: 1px solid #ccc; /* Optional: Adds a subtle border around the whole container for visual separation. */
+  border-radius: 10px;
+  overflow: hidden; /* Prevents any overflow from spilling outside the container. */
+  background: #fff; /* Matches your existing advice-item background for consistency. */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1); /* Matches your existing shadow for consistency. */
+}
+
+#sidebar {
+  width: 250px; /* Fixed width for the sidebar. Adjust if needed (e.g., 20% for responsiveness). */
+  overflow-y: auto; /* Enables vertical scrolling if filters grow long. */
+  padding: 15px;
+  background: #f0f0f0; /* Light gray background to distinguish the sidebar. */
+  border-right: 1px solid #ccc; /* Separator line between sidebar and main content. */
+  box-sizing: border-box; /* Ensures padding doesn't add to width. */
+}
+
+#main-content {
+  flex: 1; /* Takes up the remaining space. */
+  overflow-y: auto; /* Enables vertical scrolling for the advice list. */
+  padding: 15px;
+  box-sizing: border-box; /* Ensures padding doesn't add to width. */
+}
+
+/* Optional: Make the layout responsive on smaller screens (e.g., mobile) */
+@media (max-width: 768px) {
+  #content-wrapper {
+    flex-direction: column; /* Stack sidebar on top of main content on small screens. */
+    height: auto; /* Remove fixed height so it flows naturally. */
+  }
+  #sidebar {
+    width: 100%; /* Full width on mobile. */
+    border-right: none;
+    border-bottom: 1px solid #ccc;
+  }
+}
+/* -------------------------------------------------
+   COLLAPSIBLE ADD-ADVICE PANEL
+   ------------------------------------------------- */
+#add-advice-wrapper {
+  margin: 20px 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;               /* hide the sliding content */
+}
+
+#toggle-add-advice {
+  width: 100%;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px 10px 0 0;    /* rounded only on top when closed */
+  transition: background 0.2s;
+}
+#toggle-add-advice:hover { background: #0056b3; }
+#toggle-add-advice::after {
+  content: "Down Arrow";
+  float: right;
+  font-size: 14px;
+}
+
+#add-advice-section {
+  max-height: 0;                  /* closed state */
+  overflow: hidden;
+  transition: max-height 0.35s ease, padding 0.35s ease;
+  padding: 0 20px;                /* will grow when open */
+  background: #fff;
+}
+#add-advice-section.open {
+  max-height: 800px;              /* any value larger than the form height */
+  padding: 20px;                  /* normal padding when open */
+}
+
+/* make the toggle button show the correct arrow */
+#toggle-add-advice[aria-expanded="true"]::after { content: "Up Arrow"; }
+
   </style>
 </head>
 <body>
@@ -684,45 +823,61 @@ body {
   <button id="logout">Log Out</button>
 </div>
 
-  <div id="add-advice-section">
-<h2>Add New Advice</h2>
-<form id="advice-form">
-  <label>
-    Title:<br>
-    <input type="text" id="title" required>
-  </label><br><br>
+<!-- ==== COLLAPSIBLE ADD-ADVICE PANEL ==== -->
+<div id="add-advice-wrapper">
+  <button id="toggle-add-advice" class="toggle-btn">
+    Add Advice
+  </button>
 
-  <label>
-    Content:<br>
-    <textarea id="content" rows="4" required></textarea>
-  </label><br><br>
+  <div id="add-advice-section" class="collapse">
+    <h2>Add New Advice</h2>
+    <form id="advice-form">
+      <label>
+        Title:<br>
+        <input type="text" id="title" required>
+      </label><br><br>
 
-  <label>
-    Author (optional):<br>
-    <input type="text" id="author">
-  </label><br><br>
+      <label>
+        Content:<br>
+        <textarea id="content" rows="4" required></textarea>
+      </label><br><br>
 
-  <label>
-    Category:<br>
-    <input type="text" id="category">
-  </label><br><br>
+      <label>
+        Author (optional):<br>
+        <input type="text" id="author">
+      </label><br><br>
 
-  <button type="submit">Add Advice</button>
-</form>
+      <label>
+        Category:<br>
+        <input type="text" id="category">
+      </label><br><br>
+
+      <button type="submit">Add Advice</button>
+    </form>
+  </div>
 </div>
 <hr>
 
-<div id="filters">
-  <label><input type="checkbox" id="filter-my"> Added By Me</label>
-  <label><input type="checkbox" id="filter-bookmarked"> Bookmarked</label>
-  <label>Category:
-    <select id="category-select" class="view-btn">
-      <option value="">All Categories</option>
-    </select>
-  </label>
+<div id="content-wrapper">
+  <div id="sidebar">
+    <h2>Filters</h2> <!-- Optional: Adds a heading to the sidebar for clarity -->
+    <div id="filters">
+      <label><input type="checkbox" id="filter-my"> Added By Me</label>
+      <label><input type="checkbox" id="filter-bookmarked"> Bookmarked</label>
+      <label>Category:
+        <select id="category-select" class="view-btn">
+          <option value="">All Categories</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div id="main-content">
+    <h2>Advice Board</h2>
+    <div id="advice-list"></div>
+    <div style="text-align:center; margin: 20px 0;">
+      <button id="load-more-btn" style="display:none;">Load More</button>
+    </div>
+  </div>
 </div>
-
-<h2>Advice Board</h2>
-<div id="advice-list"></div>
 </body>
 </html>
