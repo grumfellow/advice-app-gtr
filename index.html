@@ -143,6 +143,7 @@ async function renderAdvice(snapshot, user) {
       <h3>${data.title}</h3>
       <p>${data.content}</p>
       <p><em>– ${data.author || "Anonymous"}</em></p>
+      <p class="category-label">${data.category ? data.category : "Uncategorized"}</p>
       ${isMine ? "<p style='color: green; font-weight: bold;'>(Your advice)</p>" : ""}
       <button class="bookmark-btn" data-id="${adviceId}">
         ${isBookmarked ? "⭐ Bookmarked" : "☆ Bookmark"}
@@ -214,6 +215,7 @@ async function renderAdviceFromDocs(docArray) {
       <h3>${data.title}</h3>
       <p>${data.content}</p>
       <p><em>– ${data.author || "Anonymous"}</em></p>
+      <p class="category-label">${data.category ? data.category : "Uncategorized"}</p>
       <button class="bookmark-btn" data-id="${adviceId}">☆ Bookmark</button>
       <button class="delete-btn" data-id="${adviceId}">🗑️ Delete</button>
       <div class="feedback-section" data-advice-id="${adviceId}">
@@ -803,6 +805,16 @@ body {
 
 /* make the toggle button show the correct arrow */
 #toggle-add-advice[aria-expanded="true"]::after { content: "Up Arrow"; }
+
+.category-label {
+  font-size: 12px;
+  color: #666;
+  background-color: #f5f5f5;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-top: 4px;
+}
 
   </style>
 </head>
