@@ -46,18 +46,90 @@
   const PAGE_SIZE = 10;
   let currentQuery = null;
   let currentUser = null;
+  let currentCategory = "";
 
-const categorySelect = document.getElementById("category-select");
 const filterMy = document.getElementById("filter-my");
 const filterBookmarked = document.getElementById("filter-bookmarked");
-categorySelect.addEventListener("change", () => {
-  const selectedCategory = categorySelect.value;
+[filterMy, filterBookmarked].forEach(el => {
+  el.addEventListener("change", () => applyFilters());
 });
-[filterMy, filterBookmarked, categorySelect].forEach(el => {
-  el.addEventListener("change", () => {
-    applyFilters();
+
+async function applyFilters() {
+  if (!currentUser) {
+    adviceList.innerHTML = "<p>Please log in to view advice.</p>";
+    return;
+  }
+
+  const showMine = filterMy.checked;
+  const showBookmarked = filterBookmarked.checked;
+
+  // Load all advice
+  const adviceRef = collection(db, "advice");
+  const allSnap = await getDocs(adviceRef);
+  let adviceDocs = allSnap.docs;
+
+  // Apply "Added By Me"
+  if (showMine) {
+    adviceDocs = adviceDocs.filter(d => d.data().authorId === currentUser.uid);
+  }
+
+  // Apply "Bookmarked"
+  if (showBookmarked) {
+    const bookmarksRef = collection(db, "users", currentUser.uid, "bookmarks");
+    const bookmarkSnap = await getDocs(bookmarksRef);
+    const bookmarkedIds = bookmarkSnap.docs.map(b => b.id);
+    adviceDocs = adviceDocs.filter(d => bookmarkedIds.includes(d.id));
+  }
+
+  // Apply category (from selected link)
+  if (currentCategory) {
+    adviceDocs = adviceDocs.filter(d => d.data().category === currentCategory);
+  }
+
+  filteredDocs = adviceDocs;
+  currentPage = 0;
+  renderPaginatedAdvice();
+}
+
+function attachStarListeners(container, adviceId, userId, userName) {
+  container.querySelectorAll(".star").forEach(star => {
+    star.addEventListener("click", async () => {
+      const rating = parseInt(star.dataset.value);
+      
+      // Update the visual state immediately
+      updateStars(container, rating);
+      
+      // Save to Firestore (non-blocking UI)
+      const comment = container.closest(".feedback-section").querySelector(".comment-input").value.trim();
+      try {
+        await saveFeedback(adviceId, userId, rating, comment, userName);
+        console.log(`Saved rating ${rating} for ${adviceId}`);
+      } catch (err) {
+        console.error("Error saving feedback:", err);
+      }
+    });
   });
-});
+}
+
+function calculateAverageRating(feedbackList) {
+  const ratings = feedbackList
+    .map(f => f.rating)
+    .filter(r => typeof r === 'number');
+  if (!ratings.length) return 0;
+  return ratings.reduce((a,b) => a+b, 0) / ratings.length;
+}
+
+function createStarElements(container, currentRating = 0) {
+  container.innerHTML = "";
+  for (let i = 1; i <= 10; i++) {
+    const star = document.createElement("span");
+    star.classList.add("star");
+    star.textContent = "★";
+    if (i <= currentRating) star.classList.add("selected");
+    star.dataset.value = i;
+    container.appendChild(star);
+  }
+}
 
 // 🧠 Load advice (filtered or not)
 async function loadAdvice(user, viewMode = "all", category = null) {
@@ -115,6 +187,68 @@ async function loadAdvice(user, viewMode = "all", category = null) {
       currentQuery = q;
     }
   });
+}
+
+async function loadCategories() {
+  const categoryLinksDiv = document.getElementById("category-links");
+  const adviceRef = collection(db, "advice");
+
+  try {
+    const snapshot = await getDocs(adviceRef);
+    const categories = new Set();
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.category && data.category.trim() !== "") {
+        categories.add(data.category.trim());
+      }
+    });
+
+    // Sort categories alphabetically
+    const sortedCategories = Array.from(categories).sort((a, b) => a.localeCompare(b));
+
+    // Always include an "All" link first
+    categoryLinksDiv.innerHTML = `<a href="#" class="category-link" data-category="">All</a>`;
+
+    // Add category links
+    sortedCategories.forEach(cat => {
+      const a = document.createElement("a");
+      a.href = "#";
+      a.textContent = cat;
+      a.classList.add("category-link");
+      a.dataset.category = cat;
+      categoryLinksDiv.appendChild(a);
+    });
+
+    // Attach click handlers
+    document.querySelectorAll(".category-link").forEach(link => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        // Highlight active link
+        document.querySelectorAll(".category-link").forEach(l => l.classList.remove("active"));
+        link.classList.add("active");
+
+        // Update global category and reapply filters
+        currentCategory = link.dataset.category;
+        applyFilters();
+      });
+    });
+
+  } catch (e) {
+    console.error("Error loading categories:", e);
+  }
+}
+
+async function loadFeedback(adviceId) {
+  const feedbackCol = collection(db, "advice", adviceId, "feedback");
+  const snapshot = await getDocs(feedbackCol);
+  return snapshot.docs.map(doc => doc.data());
+}
+
+async function loadMoreAdvice() {
+  currentPage++;
+  renderPaginatedAdvice();
 }
 
 // 🧱 Render advice list
@@ -186,7 +320,6 @@ async function renderAdvice(snapshot, user) {
 
       try {
         await deleteDoc(doc(db, "advice", adviceId));
-        alert("Advice deleted!");
         loadAdvice(user); // refresh list
       } catch (err) {
         console.error("Error deleting advice:", err);
@@ -203,11 +336,13 @@ async function renderAdvice(snapshot, user) {
   document.querySelectorAll(".category-label").forEach(label => {
     label.addEventListener("click", () => {
       const category = label.dataset.category;
-      const select = document.getElementById("category-select");
+      currentCategory = category === "Uncategorized" ? "" : category;
 
-      // Set dropdown to that category
-      select.value = category === "Uncategorized" ? "" : category;
-
+      // Highlight the matching category link in the sidebar (if it exists)
+      document.querySelectorAll(".category-link").forEach(link => {
+        link.classList.toggle("active", link.dataset.category === currentCategory);
+      });
+      
       // Apply filters with that category
       applyFilters();
     });
@@ -268,61 +403,31 @@ async function renderAdviceFromDocs(docArray) {
   document.querySelectorAll(".category-label").forEach(label => {
     label.addEventListener("click", () => {
       const category = label.dataset.category;
-      const select = document.getElementById("category-select");
+      currentCategory = category === "Uncategorized" ? "" : category;
 
-      // Set dropdown to that category
-      select.value = category === "Uncategorized" ? "" : category;
-
+      // Highlight the matching category link in the sidebar (if it exists)
+      document.querySelectorAll(".category-link").forEach(link => {
+        link.classList.toggle("active", link.dataset.category === currentCategory);
+      });
+      
       // Apply filters with that category
       applyFilters();
     });
   });
 }
 
-// 🪄 Toggle bookmark
-async function toggleBookmark(user, adviceId, btn) {
-  const bookmarkRef = doc(db, "users", user.uid, "bookmarks", adviceId);
-  const snap = await getDoc(bookmarkRef);
-
-  if (snap.exists()) {
-    await deleteDoc(bookmarkRef);
-    btn.textContent = "☆ Bookmark";
+function renderPaginatedAdvice() {
+  const start = currentPage * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageDocs = filteredDocs.slice(start, end);
+  renderAdviceFromDocs(pageDocs);
+  
+  // Show/hide Load More button
+  const loadMoreBtn = document.getElementById("load-more-btn");
+  if (end < filteredDocs.length) {
+    loadMoreBtn.style.display = "inline-block";
   } else {
-    await setDoc(bookmarkRef, { addedAt: new Date() });
-    btn.textContent = "⭐ Bookmarked";
-  }
-}
-
-async function loadCategories() {
-  const categorySelect = document.getElementById("category-select");
-  const adviceRef = collection(db, "advice");
-
-  try {
-    const snapshot = await getDocs(adviceRef);
-    const categories = new Set();
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.category && data.category.trim() !== "") {
-        categories.add(data.category.trim());
-      }
-    });
-
-    // Clear existing (except "All Categories")
-    categorySelect.innerHTML = '<option value="">All Categories</option>';
-
-    // Add each category alphabetically
-    Array.from(categories)
-      .sort((a, b) => a.localeCompare(b))
-      .forEach(cat => {
-        const option = document.createElement("option");
-        option.value = cat;
-        option.textContent = cat;
-        categorySelect.appendChild(option);
-      });
-
-  } catch (e) {
-    console.error("Error loading categories:", e);
+    loadMoreBtn.style.display = "none";
   }
 }
 
@@ -337,61 +442,6 @@ async function saveFeedback(adviceId, userId, rating, comment, userName) {
   if (comment) data.comment = comment;
 
   await setDoc(feedbackRef, data, { merge: true });
-}
-
-
-async function loadFeedback(adviceId) {
-  const feedbackCol = collection(db, "advice", adviceId, "feedback");
-  const snapshot = await getDocs(feedbackCol);
-  return snapshot.docs.map(doc => doc.data());
-}
-
-function calculateAverageRating(feedbackList) {
-  const ratings = feedbackList
-    .map(f => f.rating)
-    .filter(r => typeof r === 'number');
-  if (!ratings.length) return 0;
-  return ratings.reduce((a,b) => a+b, 0) / ratings.length;
-}
-
-function createStarElements(container, currentRating = 0) {
-  container.innerHTML = "";
-  for (let i = 1; i <= 10; i++) {
-    const star = document.createElement("span");
-    star.classList.add("star");
-    star.textContent = "★";
-    if (i <= currentRating) star.classList.add("selected");
-    star.dataset.value = i;
-    container.appendChild(star);
-  }
-}
-
-function attachStarListeners(container, adviceId, userId, userName) {
-  container.querySelectorAll(".star").forEach(star => {
-    star.addEventListener("click", async () => {
-      const rating = parseInt(star.dataset.value);
-      
-      // Update the visual state immediately
-      updateStars(container, rating);
-      
-      // Save to Firestore (non-blocking UI)
-      const comment = container.closest(".feedback-section").querySelector(".comment-input").value.trim();
-      try {
-        await saveFeedback(adviceId, userId, rating, comment, userName);
-        console.log(`Saved rating ${rating} for ${adviceId}`);
-      } catch (err) {
-        console.error("Error saving feedback:", err);
-      }
-    });
-  });
-}
-
-function updateStars(container, rating) {
-  const stars = container.querySelectorAll(".star");
-  stars.forEach(star => {
-    const value = parseInt(star.dataset.value);
-    star.classList.toggle("selected", value <= rating);
-  });
 }
 
 async function showFeedback(adviceId, container) {
@@ -421,65 +471,26 @@ async function showFeedback(adviceId, container) {
   }
 }
 
-async function applyFilters() {
-  if (!currentUser) {
-    adviceList.innerHTML = "<p>Please log in to view advice.</p>";
-    return;
-  }
+// 🪄 Toggle bookmark
+async function toggleBookmark(user, adviceId, btn) {
+  const bookmarkRef = doc(db, "users", user.uid, "bookmarks", adviceId);
+  const snap = await getDoc(bookmarkRef);
 
-  const showMine = filterMy.checked;
-  const showBookmarked = filterBookmarked.checked;
-  const category = categorySelect.value;
-
-  // Load all advice first
-  const adviceRef = collection(db, "advice");
-  const allSnap = await getDocs(adviceRef);
-  let adviceDocs = allSnap.docs;
-
-  // Apply "Added By Me" filter
-  if (showMine) {
-    adviceDocs = adviceDocs.filter(d => d.data().authorId === currentUser.uid);
-  }
-
-  // Apply "Bookmarked" filter
-  if (showBookmarked) {
-    const bookmarksRef = collection(db, "users", currentUser.uid, "bookmarks");
-    const bookmarkSnap = await getDocs(bookmarksRef);
-    const bookmarkedIds = bookmarkSnap.docs.map(b => b.id);
-    adviceDocs = adviceDocs.filter(d => bookmarkedIds.includes(d.id));
-  }
-
-  // Apply category filter
-  if (category) {
-    adviceDocs = adviceDocs.filter(d => d.data().category === category);
-  }
-
-  filteredDocs = adviceDocs; // store all matching docs
-  currentPage = 0;
-  renderPaginatedAdvice();
-
-}
-
-function renderPaginatedAdvice() {
-  const start = currentPage * PAGE_SIZE;
-  const end = start + PAGE_SIZE;
-  const docsToShow = filteredDocs.slice(start, end);
-
-  renderAdviceFromDocs(docsToShow);
-
-  const loadMoreBtn = document.getElementById("load-more-btn");
-  if (filteredDocs.length > end) {
-    loadMoreBtn.style.display = "inline-block";
+  if (snap.exists()) {
+    await deleteDoc(bookmarkRef);
+    btn.textContent = "☆ Bookmark";
   } else {
-    loadMoreBtn.style.display = "none";
+    await setDoc(bookmarkRef, { addedAt: new Date() });
+    btn.textContent = "⭐ Bookmarked";
   }
 }
 
-function loadMoreAdvice() {
-  if (!filteredDocs.length) return;
-
-  currentPage++;
-  renderPaginatedAdvice();
+function updateStars(container, rating) {
+  const stars = container.querySelectorAll(".star");
+  stars.forEach(star => {
+    const value = parseInt(star.dataset.value);
+    star.classList.toggle("selected", value <= rating);
+  });
 }
 
 // 👥 Handle auth state
@@ -525,7 +536,6 @@ onAuthStateChanged(auth, (user) => {
         category: category || "Uncategorized",
         timestamp: serverTimestamp()
       });
-      alert("Advice added!");
       form.reset();
       loadAdvice(); // refresh the list
     } catch (e) {
@@ -852,6 +862,34 @@ body {
   color: #004085;
 }
 
+#category-links-container {
+  margin-top: 10px;
+}
+
+#category-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.category-link {
+  text-decoration: none;
+  color: #007bff;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.category-link:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+.category-link.active {
+  font-weight: bold;
+  color: #004085;
+  text-decoration: underline;
+}
+
   </style>
 </head>
 <body>
@@ -912,11 +950,12 @@ body {
     <div id="filters">
       <label><input type="checkbox" id="filter-my"> Added By Me</label>
       <label><input type="checkbox" id="filter-bookmarked"> Bookmarked</label>
-      <label>Category:
-        <select id="category-select" class="view-btn">
-          <option value="">All Categories</option>
-        </select>
-      </label>
+      <div id="category-links-container">
+        <p style="font-weight:bold;">Categories</p>
+        <div id="category-links">
+          <!-- category links will be dynamically inserted here -->
+        </div>
+      </div>
     </div>
   </div>
   <div id="main-content">
