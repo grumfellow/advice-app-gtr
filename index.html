@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Advice Board</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script type="module">
     // Import Firebase modules
     import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -342,7 +343,7 @@ async function renderAdvice(snapshot, user) {
       document.querySelectorAll(".category-link").forEach(link => {
         link.classList.toggle("active", link.dataset.category === currentCategory);
       });
-      
+
       // Apply filters with that category
       applyFilters();
     });
@@ -496,6 +497,7 @@ function updateStars(container, rating) {
 // 👥 Handle auth state
 onAuthStateChanged(auth, (user) => {
     currentUser = user;
+    document.getElementById("upload-section").style.display = user ? "block" : "none";
   if (user) {
     // User is logged in
     loginSection.style.display = "none";
@@ -511,6 +513,76 @@ onAuthStateChanged(auth, (user) => {
     filters.classList.add("hidden");
     adviceList.innerHTML = "<p>Please log in to view advice.</p>";
   }
+});
+
+document.getElementById("importCsvBtn").addEventListener("click", async () => {
+  const fileInput = document.getElementById("csvFileInput");
+  const status = document.getElementById("importStatus");
+  const file = fileInput.files[0];
+  
+  if (!file) {
+    status.textContent = "Please select a CSV file first.";
+    return;
+  }
+
+  status.textContent = "Parsing file...";
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: async (results) => {
+      const data = results.data;
+      let imported = 0;
+      let skipped = 0;
+      let errors = 0;
+
+      status.textContent = `Checking ${data.length} rows for duplicates...`;
+
+      for (const row of data) {
+        try {
+          // Validate required fields
+          if (!row.title || !row.content) {
+            console.warn("Missing title or content, skipping:", row);
+            skipped++;
+            continue;
+          }
+
+          // 🔍 Check if a doc with the same title + content already exists
+          const q = query(
+            collection(db, "advice"),
+            where("title", "==", row.title),
+            where("content", "==", row.content)
+          );
+          const snapshot = await getDocs(q);
+
+          if (!snapshot.empty) {
+            // Duplicate found
+            skipped++;
+            continue;
+          }
+
+          await addDoc(collection(db, "advice"), {
+            title: row.title,
+            content: row.content,
+            author: row.author,
+            category: row.category,
+            authorId: currentUser ? currentUser.uid : null,
+            timestamp: serverTimestamp()
+          });
+          imported++;
+        } catch (err) {
+          console.error("Error importing row:", err);
+          errors++;
+        }
+      }
+
+      status.textContent = `Import complete! Imported: ${imported}, Skipped (duplicates/missing): ${skipped}, Errors: ${errors}`;
+    },
+    error: (err) => {
+      console.error("Parse error:", err);
+      status.textContent = "Error parsing CSV file.";
+    }
+  });
 });
 
   // ✏️ Add new advice
@@ -946,6 +1018,12 @@ body {
 
 <div id="content-wrapper">
   <div id="sidebar">
+    <div id="upload-section" style="margin-top:20px;">
+      <h2>Import</h2>
+      <input type="file" id="csvFileInput" accept=".csv">
+      <button id="importCsvBtn">Import to Firestore</button>
+      <p id="importStatus"></p>
+    </div>
     <h2>Filters</h2> <!-- Optional: Adds a heading to the sidebar for clarity -->
     <div id="filters">
       <label><input type="checkbox" id="filter-my"> Added By Me</label>
