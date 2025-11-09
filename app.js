@@ -39,3 +39,5 @@ onAuthStateChanged(auth, user => {
     statusEl.textContent = "Logged out";
   }
 });
+
+
