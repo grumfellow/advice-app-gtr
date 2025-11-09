@@ -11,8 +11,8 @@
             query, where, orderBy, onSnapshot, limit, startAfter } 
       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    // import { db } from "./firebase";
 
+    
   const firebaseConfig = {
     apiKey: "AIzaSyC8i6009Q7MF8jKBk88-akVRUVhhuBVHSU",
     authDomain: "advice-ad042.firebaseapp.com",
@@ -664,7 +664,6 @@ toggleBtn.addEventListener('click', () => {
 document.getElementById("load-more-btn").addEventListener("click", loadMoreAdvice);
 
 </script>
-<script type="module" src="app.js"></script>
   <style>
  form {
   background: white;
@@ -968,6 +967,7 @@ body {
   <h1>Advice Board</h1>
 
 <!-- LOGIN FORM (shown when logged out) -->
+<div id="app"></div>
 <div id="login-section">
   <input type="email" id="email" placeholder="Email">
   <input type="password" id="password" placeholder="Password">
@@ -1044,5 +1044,6 @@ body {
     </div>
   </div>
 </div>
+<script type="module" src="./app.js"></script>
 </body>
 </html>
